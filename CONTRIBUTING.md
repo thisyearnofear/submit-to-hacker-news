@@ -46,6 +46,18 @@ git checkout -b feature/your-feature-name
 - **Test edge cases**: Long titles, special characters, non-English content
 - **Test duplicate detection**: Try URLs you know have been submitted to HN
 
+### Chrome Built-in AI (Origin Trials)
+- **APIs**: Writer, Rewriter, Proofreader integrate with Chrome’s on-device models. Prompt and Summarizer are stable in Chrome ≥138; Writer/Rewriter are in origin trials (Chrome 137–148), Proofreader in origin trials (Chrome 141–145/Early Preview).
+- **Register origin trial**: Use your extension ID (`chrome-extension://<ID>`) when registering; obtain tokens per API.
+- **Inject tokens locally**: Set environment variables and run the injection script before testing:
+  - `CHROME_TRIAL_TOKEN_WRITER="<token>"`
+  - `CHROME_TRIAL_TOKEN_REWRITER="<token>"`
+  - `CHROME_TRIAL_TOKEN_PROOFREADER="<token>"`
+  - Inject: `node scripts/inject-trial-tokens.js`
+  - Or build: `npm run build:chromium` (injects tokens and creates a zip)
+- **Do not commit tokens**: Tokens are not secrets but should not be committed. The build step injects tokens from environment variables.
+- **Model download & availability**: Gemini Nano downloads on first use; the popup shows status and disables AI buttons when APIs are unavailable. If status is `downloadable`, the first use will trigger a background download.
+
 ## 📝 Code Style
 
 ### JavaScript

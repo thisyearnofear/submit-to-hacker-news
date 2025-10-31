@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "echo \"No linting configured yet\"",
+    "build:chromium": "WRITER_REWRITER_TRIAL_TOKEN=$WRITER_REWRITER_TRIAL_TOKEN PROOFREADER_TRIAL_TOKEN=$PROOFREADER_TRIAL_TOKEN node scripts/inject-trial-tokens.js && cd chromium && zip -r ../submit-to-hacker-news-chromium.zip . -x \"*.DS_Store\"",
     "package:chrome": "zip -r submit-to-hacker-news-chrome.zip . -x '*.git*' '*node_modules*' 'package*.json' 'CONTRIBUTING.md' '*.md' 'manifest-v2.json'",
     "package:firefox": "zip -r submit-to-hacker-news-firefox.zip . -x '*.git*' '*node_modules*' 'package*.json' 'CONTRIBUTING.md' '*.md' 'manifest.json'"
   },

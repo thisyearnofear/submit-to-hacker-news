@@ -19,6 +19,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const titleSection = document.querySelector('.title-section');
   const tooltipOverlay = document.getElementById('tooltipOverlay');
   const tooltipClose = document.getElementById('tooltipClose');
+  const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+  const aiRewriteBtn = document.getElementById('aiRewriteBtn');
+  const aiProofreadBtn = document.getElementById('aiProofreadBtn');
+  const aiStatus = document.getElementById('aiStatus');
+  const aiStatusText = document.getElementById('aiStatusText');
+  const aiAvailabilityNote = document.getElementById('aiAvailabilityNote');
+  const aiSuggestions = document.getElementById('aiSuggestions');
+  const aiSuggestionsList = document.getElementById('aiSuggestionsList');
+  const toast = document.getElementById('toast');
 
   let currentTab = null;
   let isPlaceholderMode = true;
@@ -26,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let cleanedTitle = '';
   let usingCleanedTitle = false;
   let existingSubmission = null;
+  let suggestionIndex = -1; // keyboard navigation index
 
   const showError = (message) => {
     errorMessage.textContent = message;
@@ -34,6 +44,76 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const hideError = () => {
     errorMessage.style.display = 'none';
+  };
+
+  const showToast = (message = 'Applied') => {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    // Auto-hide
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 1500);
+  };
+
+  const setAIStatus = (message) => {
+    if (!aiStatus) return;
+    if (message && message.length > 0) {
+      aiStatusText.textContent = message;
+      aiStatus.style.display = 'block';
+    } else {
+      aiStatusText.textContent = '';
+      aiStatus.style.display = 'none';
+    }
+  };
+
+  const setAIAvailabilityNote = (message) => {
+    if (!aiAvailabilityNote) return;
+    if (message && message.length > 0) {
+      aiAvailabilityNote.textContent = message;
+      aiAvailabilityNote.style.display = 'block';
+    } else {
+      aiAvailabilityNote.textContent = '';
+      aiAvailabilityNote.style.display = 'none';
+    }
+  };
+
+  const renderSuggestions = (items) => {
+    if (!aiSuggestions || !aiSuggestionsList) return;
+    aiSuggestionsList.innerHTML = '';
+    const suggestions = Array.isArray(items) ? items : [];
+    if (!suggestions.length) {
+      aiSuggestions.style.display = 'none';
+      return;
+    }
+    suggestionIndex = -1;
+    suggestions.forEach((s) => {
+      const li = document.createElement('li');
+      li.style.border = '1px solid #e2e8f0';
+      li.style.borderRadius = '8px';
+      li.style.background = '#ffffff';
+      li.style.padding = '8px';
+      li.style.cursor = 'pointer';
+      li.setAttribute('role', 'option');
+      const text = document.createElement('div');
+      text.textContent = s;
+      text.style.fontSize = '13px';
+      text.style.color = '#0f172a';
+      li.addEventListener('click', () => {
+        titleInput.value = s;
+        titleInput.classList.remove('placeholder');
+        aiSuggestions.style.display = 'none';
+        isPlaceholderMode = false;
+        showToast('Applied suggestion');
+        titleInput.focus();
+        const end = titleInput.value.length;
+        try { titleInput.setSelectionRange(end, end); } catch (_) {}
+      });
+      li.appendChild(text);
+      aiSuggestionsList.appendChild(li);
+    });
+    aiSuggestionsList.setAttribute('role', 'listbox');
+    aiSuggestions.style.display = 'block';
   };
 
   // Efficient duplicate check using HN's from endpoint
@@ -157,7 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
     
-    // Remove gratuitous numbers and adjectives
+    // Remove gratuitous numbers and adjectives, convert to HN-friendly format
     const numberPatterns = [
       /^\d+\s+Amazing\s+/i,
       /^\d+\s+Incredible\s+/i,
@@ -168,7 +248,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       /^\d+\s+Ways?\s+[Tt]o\s+/i,
       /^\d+\s+Tips?\s+[Ff]or\s+/i,
       /^\d+\s+Reasons?\s+[Ww]hy\s+/i,
-      /^\d+\s+Things?\s+/i
+      /^\d+\s+Things?\s+/i,
+      /^\d+\s+Ideas?\s+[Ff]or\s+/i,
+      /^\d+\s+Methods?\s+[Ff]or\s+/i,
+      /^\d+\s+Strategies?\s+[Ff]or\s+/i,
+      /^\d+\s+[Ff]acts?\s+[Aa]bout\s+/i
     ];
     
     numberPatterns.forEach(pattern => {
@@ -182,39 +266,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (pattern.source.includes('Reasons?\\s+[Ww]hy')) {
           return 'Why ';
         }
+        if (pattern.source.includes('Ideas?\\s+[Ff]or')) {
+          return 'Ideas for ';
+        }
+        if (pattern.source.includes('Methods?\\s+[Ff]or')) {
+          return 'Methods for ';
+        }
+        if (pattern.source.includes('Strategies?\\s+[Ff]or')) {
+          return 'Strategies for ';
+        }
+        if (pattern.source.includes('Facts?\\s+[Aa]bout')) {
+          return 'Facts about ';
+        }
         return '';
       });
     });
     
-    // Remove excessive punctuation and caps
+    // Remove excessive punctuation and promotional language
     cleaned = cleaned.replace(/!+$/, ''); // Remove trailing exclamation marks
     cleaned = cleaned.replace(/[?]+$/, ''); // Multiple question marks
+    cleaned = cleaned.replace(/\s*[-–—]\s*The\s+Ultimate\s+Guide\s*$/i, ''); // Remove "The Ultimate Guide" suffix
     
-    // Fix common all-caps words (but preserve acronyms)
-    cleaned = cleaned.replace(/\b[A-Z]{4,}\b/g, (match) => {
-      // Keep known acronyms
-      const acronyms = ['HTML', 'CSS', 'JSON', 'HTTP', 'HTTPS', 'API', 'SDK', 'AI', 'ML', 'UI', 'UX'];
-      if (acronyms.includes(match)) return match;
-      return match.charAt(0) + match.slice(1).toLowerCase();
+    // Convert to title case for better HN readability (but preserve acronyms)
+    cleaned = cleaned.replace(/\b\w+/g, (word) => {
+      // Keep known acronyms in uppercase
+      const acronyms = ['HTML', 'CSS', 'JSON', 'HTTP', 'HTTPS', 'API', 'SDK', 'AI', 'ML', 'UI', 'UX', 'JS', 'TS', 'CSS', 'SQL', 'OS', 'URL', 'ID', 'JSON', 'XML', 'SVG'];
+      if (acronyms.includes(word.toUpperCase())) return word.toUpperCase();
+      // Capitalize first letter, lowercase the rest
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     });
     
-    return cleaned.trim();
+    // Remove leading/trailing whitespace and double spaces
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    return cleaned;
   };
 
   // Initialize the extension
   try {
-    // Get the current active tab
-    const [tab] = await (typeof browser !== 'undefined' ? browser : chrome).tabs.query({ active: true, currentWindow: true });
+    // Detect extension environment
+    const tabsApi = (typeof browser !== 'undefined' && browser?.tabs)
+      ? browser.tabs
+      : ((typeof chrome !== 'undefined' && chrome?.tabs) ? chrome.tabs : null);
+    let defaultTitle;
     
-    if (!tab) {
-      pageTitle.textContent = 'Error: No active tab';
-      pageUrl.textContent = '';
-      submitButton.disabled = true;
-      return;
-    }
+    if (!tabsApi) {
+      // Preview fallback (non-extension environment)
+      currentTab = { url: 'https://example.com/preview-article', title: 'Preview: Example Article Title' };
+      originalTitle = currentTab.title || '';
+      cleanedTitle = cleanTitleForHN(originalTitle, currentTab.url);
+      const shouldUseCleaned = cleanedTitle && cleanedTitle !== originalTitle && cleanedTitle.length > 0;
+      const displayTitle = shouldUseCleaned ? cleanedTitle : originalTitle;
+      usingCleanedTitle = shouldUseCleaned;
+      pageTitle.textContent = originalTitle || 'Untitled';
+      pageUrl.textContent = currentTab.url || '';
+      if (shouldUseCleaned) {
+        titleToggle.classList.add('show');
+        originalTitleShow.textContent = originalTitle;
+        cleanedTitleShow.textContent = cleanedTitle;
+        toggleButton.addEventListener('click', () => {
+          usingCleanedTitle = !usingCleanedTitle;
+          const newTitle = usingCleanedTitle ? cleanedTitle : originalTitle;
+          titleInput.value = newTitle;
+          titleInput.classList.add('placeholder');
+          isPlaceholderMode = true;
+          toggleButton.textContent = usingCleanedTitle ? 'use original instead' : 'use cleaned version';
+          if (usingCleanedTitle) {
+            originalTitleShow.className = 'title-original';
+            cleanedTitleShow.className = 'title-cleaned';
+          } else {
+            originalTitleShow.className = 'title-cleaned';
+            cleanedTitleShow.className = 'title-original';
+          }
+        });
+      }
+      titleSection.classList.remove('hidden');
+      defaultTitle = displayTitle || 'Enter title or leave blank to use above';
+      titleInput.value = defaultTitle;
+      titleInput.classList.add('placeholder');
+      isPlaceholderMode = true;
+    } else {
+      // Extension environment
+      const [tab] = await tabsApi.query({ active: true, currentWindow: true });
+      if (!tab) {
+        pageTitle.textContent = 'Error: No active tab';
+        pageUrl.textContent = '';
+        submitButton.disabled = true;
+        return;
+      }
+      currentTab = tab;
 
-    currentTab = tab;
-    
     // Store and process titles
     originalTitle = tab.title || '';
     cleanedTitle = cleanTitleForHN(originalTitle, tab.url);
@@ -256,18 +397,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Set up placeholder-style behavior for title input
-    const defaultTitle = displayTitle || 'Enter title or leave blank to use above';
+    defaultTitle = displayTitle || 'Enter title or leave blank to use above';
     titleInput.value = defaultTitle;
     titleInput.classList.add('placeholder');
     isPlaceholderMode = true;
     
     // Start duplicate check in background (don't block UI)
-    if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('moz-extension://') && !tab.url.includes('localhost')) {
+    if (currentTab.url && !currentTab.url.startsWith('chrome://') && !currentTab.url.startsWith('moz-extension://') && !currentTab.url.includes('localhost')) {
       // Show checking status and hide title section
       checkingStatus.classList.add('show');
       titleSection.classList.add('hidden');
       
-      checkForDuplicate(tab.url).then(result => {
+      checkForDuplicate(currentTab.url).then(result => {
         // Hide checking status
         checkingStatus.classList.remove('show');
         
@@ -285,8 +426,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         titleSection.classList.remove('hidden');
       });
     } else {
-      // For local URLs, just show the title section immediately
+      // For local URLs or preview, just show the title section immediately
       titleSection.classList.remove('hidden');
+    }
     }
     
     // Auto-focus the title input
@@ -294,6 +436,194 @@ document.addEventListener('DOMContentLoaded', async () => {
       titleInput.focus();
       titleInput.select(); // Select all text for easy replacement
     }, 100);
+
+    // Wire AI assistance buttons (graceful degradation)
+    const aiAvailable = typeof window.aiService !== 'undefined';
+    let proofreaderCanAuto = false;
+    if (!aiAvailable) {
+      // Disable buttons if AI service is missing
+      [aiGenerateBtn, aiRewriteBtn, aiProofreadBtn].forEach((btn) => {
+        if (btn) btn.disabled = true;
+      });
+      setAIAvailabilityNote('Built-in AI unavailable. Ensure origin trials are active and models download on first use.');
+    } else {
+      // Per-API availability gating
+      try {
+        const avail = await window.aiService.availability();
+        const gate = (btn, info, label) => {
+          if (!btn) return;
+          const supported = info && info.supported;
+          const status = info && info.status;
+          if (!supported || status === 'unavailable' || status === 'error') {
+            btn.disabled = true;
+            btn.title = `${label} unavailable (${status || 'unsupported'})`;
+          } else {
+            btn.disabled = false;
+            btn.title = status === 'downloadable' ? `${label} will download on first use` : `${label} ready`;
+          }
+        };
+
+        gate(aiGenerateBtn, avail.writer, 'AI Generate');
+        gate(aiRewriteBtn, avail.rewriter, 'Rewrite');
+        gate(aiProofreadBtn, avail.proofreader, 'Proofread');
+
+        proofreaderCanAuto = !!(avail.proofreader && avail.proofreader.supported && ['ready','downloadable'].includes(avail.proofreader.status));
+
+        const disabled = [
+          { label: 'Writer', info: avail.writer },
+          { label: 'Rewriter', info: avail.rewriter },
+          { label: 'Proofreader', info: avail.proofreader },
+        ].filter(({ info }) => !info.supported || info.status === 'unavailable' || info.status === 'error');
+        if (disabled.length) {
+          const msgs = disabled.map(({ label, info }) => `${label}: ${info.status || 'unsupported'}`);
+          setAIAvailabilityNote(`Some AI features are unavailable — ${msgs.join('; ')}.`);
+        } else if (avail.writer.status === 'downloadable' || avail.rewriter.status === 'downloadable' || avail.proofreader.status === 'downloadable') {
+          setAIAvailabilityNote('Models will download on first AI use; please wait for completion.');
+        } else {
+          setAIAvailabilityNote('');
+        }
+      } catch (e) {
+        console.warn('AI availability check failed:', e);
+      }
+
+      // Progress monitor
+      window.aiService.on((evt) => {
+        if (evt.type === 'download' && typeof evt.payload?.loaded === 'number') {
+          const pct = Math.round(evt.payload.loaded * 100);
+          setAIStatus(`Downloading model… ${pct}%`);
+          if (pct >= 100) setAIStatus('Model ready');
+        }
+      });
+
+      const getCurrentTitleSeed = () => {
+        if (isPlaceholderMode || titleInput.value.trim() === '' || titleInput.value === defaultTitle) {
+          return usingCleanedTitle ? cleanedTitle : originalTitle;
+        }
+        return titleInput.value.trim();
+      };
+
+      // Debounced inline proofreading hint
+      let proofreadTimer = null;
+      const scheduleProofread = () => {
+        if (!proofreaderCanAuto) return;
+        if (proofreadTimer) clearTimeout(proofreadTimer);
+        proofreadTimer = setTimeout(async () => {
+          try {
+            const input = titleInput.value.trim();
+            if (!input || input === defaultTitle) return;
+            const corrected = await window.aiService.proofreadTitle(input);
+            if (corrected && corrected.trim() && corrected.trim() !== input.trim()) {
+              // Compact hint with apply action
+              aiStatusText.textContent = `Suggestion: "${corrected.trim()}"`;
+              const applyBtn = document.createElement('button');
+              applyBtn.textContent = 'Apply';
+              applyBtn.className = 'submit-button';
+              applyBtn.style.padding = '4px 8px';
+              applyBtn.style.fontSize = '12px';
+              applyBtn.style.marginLeft = '8px';
+              applyBtn.addEventListener('click', () => {
+                titleInput.value = corrected.trim();
+                titleInput.classList.remove('placeholder');
+                aiStatusText.textContent = '';
+                aiStatus.style.display = 'none';
+                aiStatus.classList.remove('hint-fade');
+                showToast('Applied correction');
+                titleInput.focus();
+                const end = titleInput.value.length;
+                try { titleInput.setSelectionRange(end, end); } catch (_) {}
+              });
+              // Reset status area and append button
+               aiStatus.classList.remove('hint-fade'); // restart animation
+               void aiStatus.offsetWidth;
+              aiStatus.style.display = 'block';
+              // Clear previous button if any
+              while (aiStatus.childNodes.length > 1) aiStatus.removeChild(aiStatus.lastChild);
+              aiStatus.appendChild(applyBtn);
+               aiStatus.classList.add('hint-fade');
+            } else {
+              setAIStatus('');
+            }
+          } catch (_) {
+            // Silently ignore proofreading failures for minimal UX
+          }
+        }, 600);
+      };
+
+      if (aiGenerateBtn) {
+        aiGenerateBtn.addEventListener('click', async () => {
+          try {
+            setAIStatus('Generating title…');
+            const seed = getCurrentTitleSeed();
+            const variants = await window.aiService.writeTitleVariants(seed, 3, 'Hacker News submission title');
+            if (Array.isArray(variants) && variants.length > 0) {
+              renderSuggestions(variants);
+            } else {
+              const output = await window.aiService.writeTitle(seed, 'Hacker News submission title');
+              if (output && output.trim().length > 0) {
+                titleInput.value = output.trim();
+                titleInput.classList.remove('placeholder');
+                isPlaceholderMode = false;
+              }
+              renderSuggestions([]);
+            }
+            setAIStatus('');
+          } catch (e) {
+            console.error('AI Generate failed:', e);
+            showError('AI Generate unavailable. Ensure Chrome built-in AI and origin trial token.');
+            setAIStatus('');
+          }
+        });
+      }
+
+      if (aiRewriteBtn) {
+        aiRewriteBtn.addEventListener('click', async () => {
+          try {
+            setAIStatus('Rewriting title…');
+            const input = getCurrentTitleSeed();
+            
+            // Get multiple rewrite variants with different tones
+            const variants = await window.aiService.rewriteTitleVariants(input, 3);
+            if (Array.isArray(variants) && variants.length > 0) {
+              renderSuggestions(variants);
+            } else {
+              // Fallback to single rewrite if variants fail
+              const output = await window.aiService.rewriteTitle(input, { tone: 'as-is', length: 'shorter' });
+              if (output && output.trim().length > 0) {
+                titleInput.value = output.trim();
+                titleInput.classList.remove('placeholder');
+                isPlaceholderMode = false;
+              }
+              renderSuggestions([]);
+            }
+            setAIStatus('');
+          } catch (e) {
+            console.error('AI Rewrite failed:', e);
+            showError('AI Rewrite unavailable. Ensure Chrome built-in AI and origin trial token.');
+            setAIStatus('');
+          }
+        });
+      }
+
+      if (aiProofreadBtn) {
+        aiProofreadBtn.addEventListener('click', async () => {
+          try {
+            setAIStatus('Proofreading title…');
+            const input = getCurrentTitleSeed();
+            const corrected = await window.aiService.proofreadTitle(input);
+            if (corrected && corrected.trim().length > 0 && corrected.trim() !== input.trim()) {
+              titleInput.value = corrected.trim();
+              titleInput.classList.remove('placeholder');
+              isPlaceholderMode = false;
+            }
+            setAIStatus('');
+          } catch (e) {
+            console.error('AI Proofread failed:', e);
+            showError('AI Proofread unavailable. Ensure Chrome built-in AI and origin trial token.');
+            setAIStatus('');
+          }
+        });
+      }
+    }
 
 
     // Set up the submit button click handler
@@ -303,8 +633,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Check if this is a "View Discussion" click for a duplicate
       if (submitButton.dataset.duplicateId) {
         const discussionUrl = `https://news.ycombinator.com/item?id=${submitButton.dataset.duplicateId}`;
-        (typeof browser !== 'undefined' ? browser : chrome).tabs.create({ url: discussionUrl });
-        window.close();
+        const createTab = (u) => {
+          if (typeof browser !== 'undefined' && browser?.tabs) {
+            browser.tabs.create({ url: u });
+          } else if (typeof chrome !== 'undefined' && chrome?.tabs) {
+            chrome.tabs.create({ url: u });
+          } else {
+            console.log('Preview mode: would open', u);
+          }
+        };
+        showToast('Opening discussion…');
+        createTab(discussionUrl);
+        try { window.close(); } catch (_) {}
         return;
       }
       
@@ -320,7 +660,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const hackerNewsUrl = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(currentTab.url)}&t=${encodeURIComponent(customTitle)}`;
       
       // Open Hacker News submission page in a new tab
-      (typeof browser !== 'undefined' ? browser : chrome).tabs.create({ url: hackerNewsUrl });
+      const createTab = (u) => {
+        if (typeof browser !== 'undefined' && browser?.tabs) {
+          browser.tabs.create({ url: u });
+        } else if (typeof chrome !== 'undefined' && chrome?.tabs) {
+          chrome.tabs.create({ url: u });
+        } else {
+          console.log('Preview mode: would open', u);
+        }
+      };
+      showToast('Opening Hacker News…');
+      createTab(hackerNewsUrl);
       
       // Close the popup
       window.close();
@@ -343,17 +693,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
     
-    titleInput.addEventListener('input', () => {
-      // Auto-resize textarea
-      titleInput.style.height = 'auto';
-      titleInput.style.height = titleInput.scrollHeight + 'px';
+      titleInput.addEventListener('input', () => {
+        // Auto-resize textarea
+        titleInput.style.height = 'auto';
+        titleInput.style.height = titleInput.scrollHeight + 'px';
       
       // Remove placeholder styling when typing
-      if (isPlaceholderMode && titleInput.value !== defaultTitle) {
-        titleInput.classList.remove('placeholder');
-        isPlaceholderMode = false;
-      }
-    });
+        if (isPlaceholderMode && titleInput.value !== defaultTitle) {
+          titleInput.classList.remove('placeholder');
+          isPlaceholderMode = false;
+        }
+
+        // Schedule proofreading suggestion
+        scheduleProofread();
+      });
     
     titleInput.addEventListener('keydown', (e) => {
       // Clear placeholder text on first keypress (except special keys)
@@ -362,7 +715,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         titleInput.classList.remove('placeholder');
         isPlaceholderMode = false;
       }
-      
+
+      // Keyboard navigation for suggestions
+      const items = aiSuggestionsList ? Array.from(aiSuggestionsList.querySelectorAll('li')) : [];
+      const hasSuggestions = aiSuggestions && aiSuggestions.style.display !== 'none' && items.length > 0;
+      const clearSelection = () => {
+        items.forEach((el) => el.classList.remove('selected'));
+      };
+      const applySelection = () => {
+        if (!hasSuggestions || suggestionIndex < 0 || suggestionIndex >= items.length) return;
+        const text = items[suggestionIndex].innerText || items[suggestionIndex].textContent || '';
+        if (text.trim().length > 0) {
+          titleInput.value = text.trim();
+          titleInput.classList.remove('placeholder');
+          isPlaceholderMode = false;
+          aiSuggestions.style.display = 'none';
+          showToast('Applied suggestion');
+          titleInput.focus();
+          const end = titleInput.value.length;
+          try { titleInput.setSelectionRange(end, end); } catch (_) {}
+        }
+      };
+      if (hasSuggestions) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          suggestionIndex = (suggestionIndex + 1) % items.length;
+          clearSelection();
+          items[suggestionIndex].classList.add('selected');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          suggestionIndex = (suggestionIndex - 1 + items.length) % items.length;
+          clearSelection();
+          items[suggestionIndex].classList.add('selected');
+        } else if (e.key === 'Enter' && !(e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          applySelection();
+        }
+      }
+
+      // Esc clears the proofreading hint area
+      if (e.key === 'Escape') {
+        aiStatusText.textContent = '';
+        aiStatus.style.display = 'none';
+        aiStatus.classList.remove('hint-fade');
+      }
+
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         // Cmd/Ctrl + Enter submits
         submitButton.click();

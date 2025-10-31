@@ -31,5 +31,10 @@
       },
       "description": "Open Submit to Hacker News"
     }
-  }
+  },
+  "trial_tokens": [
+    "Asod6yeSJwk02p8F4u9ReI5qToBwQsS9dxu0Trd8fq7LYc5wSUuufCP3jpTkbHv5PK594VgRTaMX6TbAIKz7Sg4AAABueyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vb2VqanBvY2NjbWNmaWJtbmdiaWpiam9ib2dnYWxlbWIiLCJmZWF0dXJlIjoiQUlSZXdyaXRlckFQSSIsImV4cGlyeSI6MTc2OTQ3MjAwMH0=",
+    "ApQuU/gbVFcXz04grO3jLdFn0tWwOcNwzywKYMTAKeC9cQcEQnog4OYznp3Ry96e/t1N0o9e1Jq+poBZmBg2vQkAAABseyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vb2VqanBvY2NjbWNmaWJtbmdiaWpiam9ib2dnYWxlbWIiLCJmZWF0dXJlIjoiQUlXcml0ZXJBUEkiLCJleHBpcnkiOjE3Njk0NzIwMDB9",
+    "AvxPY+MjR2sk+TqotgK4gcMORttGSmXpdn49icHSKd0bvOAy4AXD1mOrE2y8fUxebtbM6Rv375Hj8tcfWDJ0OgMAAABxeyJvcmlnaW4iOiJjaHJvbWUtZXh0ZW5zaW9uOi8vb2VqanBvY2NjbWNmaWJtbmdiaWpiam9ib2dnYWxlbWIiLCJmZWF0dXJlIjoiQUlQcm9vZnJlYWRlckFQSSIsImV4cGlyeSI6MTc3OTE0ODgwMH0="
+  ]
 }
