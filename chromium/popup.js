@@ -78,6 +78,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
+  // Highlight selected AI action button
+  const markSelected = (selectedBtn) => {
+    [aiGenerateBtn, aiRewriteBtn, aiProofreadBtn].forEach((btn) => {
+      if (!btn) return;
+      if (btn === selectedBtn) btn.classList.add('selected');
+      else btn.classList.remove('selected');
+    });
+  };
+
   const renderSuggestions = (items) => {
     if (!aiSuggestions || !aiSuggestionsList) return;
     aiSuggestionsList.innerHTML = '';
@@ -455,8 +464,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const supported = info && info.supported;
           const status = info && info.status;
           if (!supported || status === 'unavailable' || status === 'error') {
-            btn.disabled = true;
-            btn.title = `${label} unavailable (${status || 'unsupported'})`;
+            // Special case: Proofread can fall back to Rewriter
+            if (label === 'Proofread' && avail.rewriter && avail.rewriter.supported && ['ready','downloadable'].includes(avail.rewriter.status)) {
+              btn.disabled = false;
+              btn.title = 'Proofread via rewrite fallback';
+            } else {
+              btn.disabled = true;
+              btn.title = `${label} unavailable (${status || 'unsupported'})`;
+            }
           } else {
             btn.disabled = false;
             btn.title = status === 'downloadable' ? `${label} will download on first use` : `${label} ready`;
@@ -490,8 +505,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.aiService.on((evt) => {
         if (evt.type === 'download' && typeof evt.payload?.loaded === 'number') {
           const pct = Math.round(evt.payload.loaded * 100);
-          setAIStatus(`Downloading model… ${pct}%`);
-          if (pct >= 100) setAIStatus('Model ready');
+          // Only show download status if no active action status is visible
+          const hasActiveStatus = aiStatus && aiStatus.style.display !== 'none' && aiStatusText && aiStatusText.textContent && !/No changes needed/i.test(aiStatusText.textContent);
+          if (!hasActiveStatus) {
+            setAIStatus(`Downloading model… ${pct}%`);
+            if (pct >= 100) setAIStatus('Model ready');
+          }
         }
       });
 
@@ -552,6 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (aiGenerateBtn) {
         aiGenerateBtn.addEventListener('click', async () => {
           try {
+            markSelected(aiGenerateBtn);
             setAIStatus('Generating title…');
             const seed = getCurrentTitleSeed();
             const variants = await window.aiService.writeTitleVariants(seed, 3, 'Hacker News submission title');
@@ -578,12 +598,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (aiRewriteBtn) {
         aiRewriteBtn.addEventListener('click', async () => {
           try {
+            markSelected(aiRewriteBtn);
             setAIStatus('Rewriting title…');
             const input = getCurrentTitleSeed();
             
             // Get multiple rewrite variants with different tones
             const variants = await window.aiService.rewriteTitleVariants(input, 3);
             if (Array.isArray(variants) && variants.length > 0) {
+              // Auto-apply the first suggestion for immediate feedback
+              const best = variants[0].trim();
+              if (best.length > 0 && best !== input.trim()) {
+                titleInput.value = best;
+                titleInput.classList.remove('placeholder');
+                isPlaceholderMode = false;
+                showToast('Applied best rewrite');
+              }
               renderSuggestions(variants);
             } else {
               // Fallback to single rewrite if variants fail
@@ -592,6 +621,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 titleInput.value = output.trim();
                 titleInput.classList.remove('placeholder');
                 isPlaceholderMode = false;
+                showToast('Applied rewrite');
               }
               renderSuggestions([]);
             }
@@ -607,6 +637,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (aiProofreadBtn) {
         aiProofreadBtn.addEventListener('click', async () => {
           try {
+            markSelected(aiProofreadBtn);
             setAIStatus('Proofreading title…');
             const input = getCurrentTitleSeed();
             const corrected = await window.aiService.proofreadTitle(input);
@@ -614,8 +645,13 @@ document.addEventListener('DOMContentLoaded', async () => {
               titleInput.value = corrected.trim();
               titleInput.classList.remove('placeholder');
               isPlaceholderMode = false;
+              showToast('Applied proofreading');
+              setAIStatus('');
+            } else {
+              // Positive affirmation when no corrections are required
+              setAIStatus('No changes needed');
+              setTimeout(() => setAIStatus(''), 1500);
             }
-            setAIStatus('');
           } catch (e) {
             console.error('AI Proofread failed:', e);
             showError('AI Proofread unavailable. Ensure Chrome built-in AI and origin trial token.');
